@@ -1,0 +1,31 @@
+#+title: Coptic Font Conversion
+#+author: Kirols Bakheat
+
+* Description
+This software provides an easy to use binary for automating the conversion of Coptic text between the Coptic Standard format and Unicode.
+
+* Installation
+You can install this using /cargo/, through the =cargo install --git https://github.com/kero0/coptic-font-conversion= command.
+#+todo: Add pre-built binaries to github releases
+* Usage
+** Interactive usage
+If you execute the binary with no args (or with only the =--reverse= arg), you will be able to interactively type in text to convert.
+When a new line is entered, the converted text will be printed to the screen.
+
+This can be ended by pressing Ctrl+D.
+
+    #+begin_quote
+    $ coptic-font-conversion
+      <ere na=o=c `nio]@ `n`apoctoloc@ ,ere nima;ytyc@ `nte pen=o=c I=y=c P=,=c.
+      Ⲭⲉⲣⲉ ⲛⲁⲟ̅ⲥ̅ ⳿ⲛⲓⲟϯ: ⳿ⲛ⳿ⲁⲡⲟⲥⲧⲟⲗⲟⲥ: ⲭⲉⲣⲉ ⲛⲓⲙⲁⲑⲏⲧⲏⲥ: ⳿ⲛⲧⲉ ⲡⲉⲛⲟ̅ⲥ̅ Ⲓⲏ̅ⲥ̅ Ⲡⲭ̅ⲥ̅.
+      ...
+      ^D
+    #+end_quote
+
+** File usage
+You can convert an entire file at once. This can help for converting a set of files automatically without needing to copy paste.
+#+begin_src shell
+for file in *.txt; do
+    coptic-font-conversion -i "$file" -o "$file.converted"
+done
+#+end_src
