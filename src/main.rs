@@ -1,11 +1,13 @@
+use clap::{Parser, ValueHint};
+use conversions::*;
+use data::*;
 use std::{
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{stdin, stdout, BufRead, BufReader, BufWriter, Write},
 };
 
-use clap::{Parser, ValueHint};
 mod conversions;
-pub use conversions::{c2e, e2c};
+mod data;
 
 #[derive(Parser)]
 pub struct Cli {
@@ -17,74 +19,57 @@ pub struct Cli {
     #[clap(short, long, parse(from_os_str), value_hint = ValueHint::FilePath)]
     out_file: Option<std::path::PathBuf>,
 
-    /// Convert coptic unicode to coptic standard characters instead of the default unicode to cs
-    #[clap(short, long, takes_value = false)]
-    reverse: bool,
+    /// Conversion direction, to or from Coptic Standard and Unicode
+    #[clap(
+        arg_enum,
+        short,
+        long,
+        takes_value = false,
+        default_value = "coptic-standard-to-unicode"
+    )]
+    conversion: ConversionType,
 
     /// Line buffered output
     #[clap(short, long, takes_value = false, default_value = "true")]
     line_buffered: bool,
+
+    /// Handling of coptic abbreviations
+    #[clap(arg_enum, short, long, takes_value = false, default_value = "preserve")]
+    abbreviations: AbbreviationHandling,
 }
 
 fn main() {
     let args: Cli = Cli::parse();
 
-    let mut reader: Box<dyn BufRead> = match args.in_file {
+    let reader: Box<dyn BufRead> = match args.in_file {
         // use input file arg or default to stdin
-        Some(filename) => Box::new(BufReader::new(File::open(filename).unwrap())),
-        None => Box::new(BufReader::new(std::io::stdin().lock())),
+        Some(filename) => Box::new(BufReader::new(
+            File::open(filename).expect("Could not open input file"),
+        )),
+        None => Box::new(BufReader::new(stdin().lock())),
     };
 
-    let interactive = args.line_buffered;
-    let mut writer: BufWriter<Box<dyn std::io::Write>> = match args.out_file {
+    let mut writer: BufWriter<Box<dyn Write>> = BufWriter::new(match args.out_file {
         // use output file arg or default to stdout
-        Some(path) => {
-            let file = File::create(path).unwrap();
-            BufWriter::new(Box::new(file))
-        }
-        None => {
-            let stdout = std::io::stdout();
-            BufWriter::new(Box::new(stdout.lock()))
-        }
-    };
+        Some(path) => Box::new(File::create(path).expect("Could not open output file")),
+        None => Box::new(stdout().lock()),
+    });
 
     // convert coptic to unicode or unicode to coptic
-    let conv = if args.reverse { c2e } else { e2c };
+    let converter = mk_converter(args.conversion, args.abbreviations);
 
-    loop {
-        let mut line = String::new();
-        match reader.read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) => {
-                match write!(writer, "{}", conv(line)) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("Error writing to output: {}", e);
-                        break;
-                    }
-                }
-                if interactive {
-                    match writer.flush() {
-                        Ok(_) => {}
-                        Err(e) => {
-                            eprintln!("error: {}", e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("error: {}", e);
-                std::process::exit(1);
-            }
+    // get an iterator over the lines of the input
+    reader.lines().for_each(|line| {
+        // read and convert each line
+        let line = converter(line.expect("Error reading line"));
+        // write the converted line to the output
+        writeln!(writer, "{}", line).expect("Error writing line");
+        // flush the output if we're in interactive mode
+        if args.line_buffered {
+            writer.flush().expect("Error flushing");
         }
-    }
+    });
 
-    match writer.flush() {
-        Err(e) => {
-            eprintln!("error: {}", e);
-            std::process::exit(1);
-        }
-        Ok(_) => std::process::exit(0),
-    }
+    // flush the output on exit
+    writer.flush().expect("Error flushing");
 }
