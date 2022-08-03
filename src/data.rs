@@ -80,34 +80,16 @@ pub const ABBREVIATIONS: [(&'static str, &'static str); 9] = [
     ("I=y=c", "Iycouc"),
     ("P=,=c", "Pi`,rictoc"),
 ];
-#[derive(ArgEnum)]
+
+#[derive(ArgEnum, Clone)]
 pub enum ConversionType {
     CopticStandardToUnicode,
     UnicodeToCopticStandard,
 }
 
-#[derive(ArgEnum)]
+#[derive(ArgEnum, Clone)]
 pub enum AbbreviationHandling {
     Preserve,
     Unabbreviate,
     Abbreviate,
-}
-
-impl Clone for ConversionType {
-    fn clone(&self) -> Self {
-        match self {
-            ConversionType::CopticStandardToUnicode => ConversionType::CopticStandardToUnicode,
-            ConversionType::UnicodeToCopticStandard => ConversionType::UnicodeToCopticStandard,
-        }
-    }
-}
-
-impl Clone for AbbreviationHandling {
-    fn clone(&self) -> Self {
-        match self {
-            AbbreviationHandling::Preserve => AbbreviationHandling::Preserve,
-            AbbreviationHandling::Unabbreviate => AbbreviationHandling::Unabbreviate,
-            AbbreviationHandling::Abbreviate => AbbreviationHandling::Abbreviate,
-        }
-    }
 }
