@@ -1,145 +1,143 @@
 use crate::data::*;
-use std::convert::identity;
 
 fn unabbreviate(s: String) -> String {
-        let mut s = s;
-        ABBREVIATIONS
-                .iter()
-                .for_each(|(abbreviation, full_name)| s = s.replace(abbreviation, full_name));
-        s
+    ABBREVIATIONS
+        .iter()
+        .fold(s, |s, (abbreviation, full_name)| {
+            s.replace(abbreviation, full_name)
+        })
 }
 
 fn abbreviate(s: String) -> String {
-        let mut s = s;
-        ABBREVIATIONS
-                .iter()
-                .for_each(|(abbreviation, full_name)| s = s.replace(full_name, abbreviation));
-        s
+    ABBREVIATIONS
+        .iter()
+        .fold(s, |s, (abbreviation, full_name)| {
+            s.replace(full_name, abbreviation)
+        })
 }
 
-fn convert(s: String, converter: fn(char) -> char) -> String {
-        s.chars().map(converter).collect::<String>()
+impl Converter for ConversionType {
+    fn convert1(&self, c: char) -> char {
+        match self {
+            ConversionType::CopticStandardToUnicode => CHARMAP
+                .iter()
+                .find(|(k, _)| *k == c)
+                .map(|(_, v)| *v)
+                .unwrap_or(c),
+            ConversionType::UnicodeToCopticStandard => CHARMAP
+                .iter()
+                .find(|(_, v)| *v == c)
+                .map(|(k, _)| *k)
+                .unwrap_or(c),
+        }
+    }
+    fn convert(&self, s: String) -> String {
+        match self {
+            ConversionType::CopticStandardToUnicode => {
+                let mut v: Vec<char> = Vec::with_capacity(s.len());
+                let mut eq: bool = false;
+                for c in s.chars() {
+                    if c == '=' {
+                        eq = true;
+                    } else if eq {
+                        v.push(self.convert1(c));
+                        v.push('\u{305}');
+                        eq = false;
+                    } else {
+                        v.push(self.convert1(c));
+                    }
+                }
+                v.into_iter().collect()
+            }
+
+            ConversionType::UnicodeToCopticStandard => {
+                let mut v: Vec<char> = Vec::with_capacity(s.len());
+                let mut eq: bool = false;
+                for c in s.chars() {
+                    if c == '\u{305}' {
+                        eq = true;
+                    } else if eq {
+                        let c1 = v
+                            .pop()
+                            .expect(format!("Malformed abbreviation in string: {}", s).as_str());
+                        v.push('=');
+                        v.push(c1);
+                        v.push(self.convert1(c));
+                        eq = false;
+                    } else {
+                        v.push(self.convert1(c));
+                    }
+                }
+                v.into_iter().collect()
+            }
+        }
+    }
 }
 
 pub fn mk_converter(
-        conversion_direction: ConversionType,
-        abbreviation_handling: AbbreviationHandling,
+    direction: ConversionType,
+    abbreviation_handling: AbbreviationHandling,
 ) -> Box<dyn Fn(String) -> String> {
-        let abbreviator = match abbreviation_handling {
-                AbbreviationHandling::Unabbreviate => unabbreviate,
-                AbbreviationHandling::Abbreviate => abbreviate,
-                AbbreviationHandling::Preserve => identity,
-        };
+    let abbreviator = match abbreviation_handling {
+        AbbreviationHandling::Abbreviate => abbreviate,
+        AbbreviationHandling::Unabbreviate => unabbreviate,
+        AbbreviationHandling::Preserve => std::convert::identity,
+    };
 
-        return match conversion_direction {
-                ConversionType::UnicodeToCopticStandard => {
-                        let swap_abbreviator = match abbreviation_handling {
-                                AbbreviationHandling::Unabbreviate => identity,
-                                _ => {
-                                        |s: String| -> String {
-                                                let mut v: Vec<char> = Vec::with_capacity(s.len());
-                                                for c in s.chars() {
-                                                        if c == '\u{305}' {
-                                                                let c = v.pop().expect("Malformed abbreviation detected");
-                                                                v.push('=');
-                                                                v.push(c);
-                                                        } else {
-                                                                v.push(c);
-                                                        }
-                                                }
-                                                v.iter().collect::<String>()
-                                        }
-                                }
-                        };
-                        Box::new(move |s: String| {
-                                let s = swap_abbreviator(s);
-                                let s = convert(s, |c: char| {
-                                        CHARMAP.iter()
-                                                .find(|&&(_, c1)| c1 == c)
-                                                .map(|&(c1, _)| c1)
-                                                .unwrap_or(c)
-                                });
-                                abbreviator(s)
-                        })
-                }
-                ConversionType::CopticStandardToUnicode => {
-                        let swap_abbreviator = match abbreviation_handling {
-                                AbbreviationHandling::Unabbreviate => std::convert::identity,
-                                _ => |s: String| -> String {
-                                        let mut v = Vec::with_capacity(s.len());
-                                        let mut last_was_equals = false;
-                                        for c in s.chars() {
-                                                if last_was_equals {
-                                                        v.push(c);
-                                                        v.push('\u{305}');
-                                                        last_was_equals = false;
-                                                } else if c == '=' {
-                                                        last_was_equals = true;
-                                                } else {
-                                                        v.push(c);
-                                                }
-                                        }
-                                        v.iter().collect::<String>()
-                                },
-                        };
-                        Box::new(move |s: String| {
-                                let s = abbreviator(s);
-                                let s = swap_abbreviator(s);
-
-                                convert(s, |c: char| {
-                                        CHARMAP.iter()
-                                                .find(|&&(c1, _)| c1 == c)
-                                                .map(|&(_, c2)| c2)
-                                                .unwrap_or(c)
-                                })
-                        })
-                }
-        };
+    match direction {
+        ConversionType::CopticStandardToUnicode => {
+            Box::new(move |s| abbreviator(direction.convert(s)))
+        }
+        ConversionType::UnicodeToCopticStandard => {
+            Box::new(move |s| direction.convert(abbreviator(s)))
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-        use super::*;
-        use std::str::FromStr;
+    use super::*;
+    use std::str::FromStr;
 
-        #[test]
-        fn e2c() {
-                let converter = mk_converter(
-                        ConversionType::CopticStandardToUnicode,
-                        AbbreviationHandling::Preserve,
-                );
-                assert_eq!(converter(
-                        String::from_str(
-                                "<ere na=o=c `nio]@ `n`apoctoloc@ ,ere nima;ytyc@ `nte pen=o=c I=y=c P=,=c.")
-                                .unwrap()),
-                           "Ⲭⲉⲣⲉ ⲛⲁⲟ̅ⲥ̅ ⳿ⲛⲓⲟϯ: ⳿ⲛ⳿ⲁⲡⲟⲥⲧⲟⲗⲟⲥ: ⲭⲉⲣⲉ ⲛⲓⲙⲁⲑⲏⲧⲏⲥ: ⳿ⲛⲧⲉ ⲡⲉⲛⲟ̅ⲥ̅ Ⲓⲏ̅ⲥ̅ Ⲡⲭ̅ⲥ̅."
-                );
-        }
-        #[test]
-        fn c2e() {
-                let converter = mk_converter(
-                        ConversionType::UnicodeToCopticStandard,
-                        AbbreviationHandling::Preserve,
-                );
-                assert_eq!(
-                        "<ere na=o=c `nio]@ `n`apoctoloc@ ,ere nima;ytyc@ `nte pen=o=c I=y=c P=,=c.",
-                        converter(String::from_str(
-                                "Ⲭⲉⲣⲉ ⲛⲁⲟ̅ⲥ̅ ⳿ⲛⲓⲟϯ: ⳿ⲛ⳿ⲁⲡⲟⲥⲧⲟⲗⲟⲥ: ⲭⲉⲣⲉ ⲛⲓⲙⲁⲑⲏⲧⲏⲥ: ⳿ⲛⲧⲉ ⲡⲉⲛⲟ̅ⲥ̅ Ⲓⲏ̅ⲥ̅ Ⲡⲭ̅ⲥ̅.").unwrap())
-                );
-        }
+    macro_rules! test_case {
+        ($name:ident, $conversion_type:expr, $abbreviation_handling:expr, $input:expr, $expected:expr) => {
+            #[test]
+            fn $name() {
+                let converter = mk_converter($conversion_type, $abbreviation_handling);
+                assert_eq!(converter(String::from_str($input).unwrap()), $expected)
+            }
+        };
+    }
 
-        #[test]
-        fn e2c_abbreviate() {
-                let converter = mk_converter(
-                        ConversionType::CopticStandardToUnicode,
-                        AbbreviationHandling::Unabbreviate,
-                );
-                assert_eq!(converter(String::from_str("pen=o=c").unwrap()), "ⲡⲉⲛϭⲟⲓⲥ");
-                assert_eq!(converter(String::from_str("I=y=c").unwrap()), "Ⲓⲏⲥⲟⲩⲥ");
-                assert_eq!(converter(String::from_str("P=,=c").unwrap()), "Ⲡⲓ⳿ⲭⲣⲓⲥⲧⲟⲥ");
-                assert_eq!(
-                        converter(String::from_str("pen=o=c I=y=c P=,=c").unwrap()),
-                        "ⲡⲉⲛϭⲟⲓⲥ Ⲓⲏⲥⲟⲩⲥ Ⲡⲓ⳿ⲭⲣⲓⲥⲧⲟⲥ"
-                );
-        }
+    test_case!(
+        e2c,
+        ConversionType::CopticStandardToUnicode,
+        AbbreviationHandling::Preserve,
+        "<ere na=o=c `nio]@ `n`apoctoloc@ ,ere nima;ytyc@ `nte pen=o=c I=y=c P=,=c.",
+        "Ⲭⲉⲣⲉ ⲛⲁⲟ̅ⲥ̅ ⳿ⲛⲓⲟϯ: ⳿ⲛ⳿ⲁⲡⲟⲥⲧⲟⲗⲟⲥ: ⲭⲉⲣⲉ ⲛⲓⲙⲁⲑⲏⲧⲏⲥ: ⳿ⲛⲧⲉ ⲡⲉⲛⲟ̅ⲥ̅ Ⲓⲏ̅ⲥ̅ Ⲡⲭ̅ⲥ̅."
+    );
+
+    test_case!(
+        c2e,
+        ConversionType::UnicodeToCopticStandard,
+        AbbreviationHandling::Preserve,
+        "Ⲭⲉⲣⲉ ⲛⲁⲟ̅ⲥ̅ ⳿ⲛⲓⲟϯ: ⳿ⲛ⳿ⲁⲡⲟⲥⲧⲟⲗⲟⲥ: ⲭⲉⲣⲉ ⲛⲓⲙⲁⲑⲏⲧⲏⲥ: ⳿ⲛⲧⲉ ⲡⲉⲛⲟ̅ⲥ̅ Ⲓⲏ̅ⲥ̅ Ⲡⲭ̅ⲥ̅.",
+        "<ere na=o=c `nio]@ `n`apoctoloc@ ,ere nima;ytyc@ `nte pen=o=c I=y=c P=,=c."
+    );
+
+    test_case!(
+        e2c_abbreviate,
+        ConversionType::CopticStandardToUnicode,
+        AbbreviationHandling::Abbreviate,
+        "<ere na=o=c `nio]@ `n`apoctoloc@ ,ere nima;ytyc@ `nte pen=o=c I=y=c P=,=c.",
+        "Ⲭⲉⲣⲉ ⲛⲁⲟ̅ⲥ̅ ⳿ⲛⲓⲟϯ: ⳿ⲛ⳿ⲁⲡⲟⲥⲧⲟⲗⲟⲥ: ⲭⲉⲣⲉ ⲛⲓⲙⲁⲑⲏⲧⲏⲥ: ⳿ⲛⲧⲉ ⲡⲉⲛⲟ̅ⲥ̅ Ⲓⲏ̅ⲥ̅ Ⲡⲭ̅ⲥ̅."
+    );
+
+    test_case!(
+        c2e_abbreviate,
+        ConversionType::UnicodeToCopticStandard,
+        AbbreviationHandling::Abbreviate,
+        "Ⲭⲉⲣⲉ ⲛⲁⲟ̅ⲥ̅ ⳿ⲛⲓⲟϯ: ⳿ⲛ⳿ⲁⲡⲟⲥⲧⲟⲗⲟⲥ: ⲭⲉⲣⲉ ⲛⲓⲙⲁⲑⲏⲧⲏⲥ: ⳿ⲛⲧⲉ ⲡⲉⲛⲟ̅ⲥ̅ Ⲓⲏ̅ⲥ̅ Ⲡⲭ̅ⲥ̅.",
+        "<ere na=o=c `nio]@ `n`apoctoloc@ ,ere nima;ytyc@ `nte pen=o=c I=y=c P=,=c."
+    );
 }
