@@ -73,23 +73,82 @@ pub const ABBREVIATIONS: [(&'static str, &'static str); 9] = [
     ("¥", "<rictoc"),
     ("¢", "Marturoc"),
     ("=o=c", "[oic"),
-    ("V] ", "Vnou] "),
-    (" V] ", " Vnou]"),
     ("=A=l", "Allylouia"),
-    ("=o=c", "[oic"),
     ("I=y=c", "Iycouc"),
     ("P=,=c", "Pi`,rictoc"),
+    // efnouti is a special abbreviation
+    // It is neither a special character nor intersperesd with = or \u{305} and there's no jemkin above it
+    // This is due to cultural convention, where the word God never has anything above it
+    // This makes it difficult to tell if the string V] is the beginning of a word or an abbreviation
+    ("V] ", "Vnou] "),
+    (" V].", " Vnou]."),
+    (" V]@", " Vnou]@"),
 ];
 
-#[derive(ArgEnum, Clone)]
+#[derive(ArgEnum, Clone, Debug)]
 pub enum ConversionType {
     CopticStandardToUnicode,
     UnicodeToCopticStandard,
 }
 
-#[derive(ArgEnum, Clone)]
+#[derive(ArgEnum, Clone, Debug)]
 pub enum AbbreviationHandling {
     Preserve,
     Unabbreviate,
     Abbreviate,
+}
+
+pub trait Converter {
+    fn convert1(&self, c: char) -> char;
+    fn convert(&self, s: String) -> String;
+}
+mod tests {
+
+    #[test]
+    fn charmaps_cs_unique() {
+        let mut charset = std::collections::HashSet::new();
+        for (cs, _) in super::CHARMAP.iter() {
+            assert!(
+                charset.insert(cs),
+                "Coptic Standard character mapped to multiple unicode characters: {}",
+                cs
+            );
+        }
+    }
+
+    #[test]
+    fn charmaps_u_unique() {
+        let mut charset = std::collections::HashSet::new();
+        for (_, u) in super::CHARMAP.iter() {
+            assert!(
+                charset.insert(u),
+                "Unicode character mapped to multiple Coptic Standard characters: {}",
+                u
+            );
+        }
+    }
+
+    #[test]
+    fn abbreviations_abbreviation_unique() {
+        let mut charset = std::collections::HashSet::new();
+        for (cs, _) in super::ABBREVIATIONS.iter() {
+            assert!(
+                charset.insert(cs),
+                "Abbreviation mapped to multiple words: {}",
+                cs
+            );
+        }
+    }
+
+    #[test]
+    fn abbreviations_word_unique() {
+        let mut charset = std::collections::HashSet::new();
+        for (_, word) in super::ABBREVIATIONS.iter() {
+            assert!(
+                charset.insert(word),
+                "Word mapped to multiple abbreviations: {}",
+                word
+            );
+        }
+    }
 }
