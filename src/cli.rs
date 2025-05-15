@@ -16,6 +16,7 @@ pub struct Cli {
         short,
         long,
         value_enum,
+        default_value = "coptic-standard-to-unicode",
     )]
     pub conversion: ConversionType,
 
@@ -28,6 +29,7 @@ pub struct Cli {
         short,
         long,
         value_enum,
+        default_value = "preserve",
     )]
     pub abbreviations: AbbreviationHandling,
 }
