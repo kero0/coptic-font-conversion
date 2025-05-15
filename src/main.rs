@@ -1,6 +1,7 @@
-use clap::{Parser, ValueHint};
+use clap::Parser;
 use conversions::*;
 use data::*;
+use cli::*;
 use rustyline::error::ReadlineError;
 use std::{
     fs::File,
@@ -10,35 +11,7 @@ use std::{
 
 mod conversions;
 mod data;
-
-#[derive(Parser)]
-pub struct Cli {
-    /// File to read text from, otherwise stdin
-    #[clap(short, long, parse(from_os_str), value_hint = ValueHint::FilePath)]
-    in_file: Option<std::path::PathBuf>,
-
-    /// File to write text to, otherwise stdout
-    #[clap(short, long, parse(from_os_str), value_hint = ValueHint::FilePath)]
-    out_file: Option<std::path::PathBuf>,
-
-    /// Conversion direction, to or from Coptic Standard and Unicode
-    #[clap(
-        arg_enum,
-        short,
-        long,
-        takes_value = false,
-        default_value = "coptic-standard-to-unicode"
-    )]
-    conversion: ConversionType,
-
-    /// Line buffered output
-    #[clap(short, long, takes_value = false, default_value = "true")]
-    line_buffered: bool,
-
-    /// Handling of coptic abbreviations
-    #[clap(arg_enum, short, long, takes_value = false, default_value = "preserve")]
-    abbreviations: AbbreviationHandling,
-}
+mod cli;
 
 fn handle_file(
     filename: PathBuf,
@@ -67,11 +40,13 @@ fn handle_readline(
     mut writer: BufWriter<Box<dyn Write>>,
     line_buffered: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut rl = rustyline::Editor::<()>::new()?;
+    let mut rl = rustyline::DefaultEditor::new()?;
     loop {
         match rl.readline("↦ ") {
             Ok(line) => {
-                rl.add_history_entry(line.as_str());
+                if let Err(err) = rl.add_history_entry(line.as_str()) {
+                    writeln!(std::io::stderr(), "Error while writing to history \"{}\"", err)?;
+                };
                 let line = converter(line);
                 writeln!(writer, "{}", line)?;
                 if line_buffered {

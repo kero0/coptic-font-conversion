@@ -1,4 +1,4 @@
-use crate::data::*;
+use crate::*;
 
 fn unabbreviate(s: String) -> String {
     ABBREVIATIONS

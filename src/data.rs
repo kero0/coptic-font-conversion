@@ -1,6 +1,3 @@
-use clap::ArgEnum;
-use std::clone::Clone;
-
 pub const CHARMAP: [(char, char); 65] = [
     ('a', 'ⲁ'),
     ('b', 'ⲃ'),
@@ -84,19 +81,6 @@ pub const ABBREVIATIONS: [(&'static str, &'static str); 9] = [
     (" V].", " Vnou]."),
     (" V]@", " Vnou]@"),
 ];
-
-#[derive(ArgEnum, Clone, Debug)]
-pub enum ConversionType {
-    CopticStandardToUnicode,
-    UnicodeToCopticStandard,
-}
-
-#[derive(ArgEnum, Clone, Debug)]
-pub enum AbbreviationHandling {
-    Preserve,
-    Unabbreviate,
-    Abbreviate,
-}
 
 pub trait Converter {
     fn convert1(&self, c: char) -> char;
