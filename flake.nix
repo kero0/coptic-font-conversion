@@ -39,7 +39,7 @@
           pkgs = import nixpkgs { inherit system; };
         in
         {
-          ${system} = pkgs.rustPlatform.buildRustPackage rec {
+          ${system}.default = pkgs.rustPlatform.buildRustPackage rec {
             name = "coptic-font-conversion";
             version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
 
@@ -50,6 +50,6 @@
     in
     {
       devShells = nixpkgs.lib.foldr nixpkgs.lib.mergeAttrs { } (map mkshell supportedSystems);
-      defaultPackage = nixpkgs.lib.foldr nixpkgs.lib.mergeAttrs { } (map mkpackage supportedSystems);
+      packages = nixpkgs.lib.foldr nixpkgs.lib.mergeAttrs { } (map mkpackage supportedSystems);
     };
 }
